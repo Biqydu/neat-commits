@@ -68,7 +68,12 @@ fn main() -> Result<()> {
         }
     };
 
-    if !types.contains(&commit_type.as_str()) {
+    let valid_types: Vec<&str> = types
+        .iter()
+        .map(|t| t.split(':').next().unwrap().trim())
+        .collect();
+
+    if !valid_types.contains(&commit_type.as_str()) {
         println!(
             "{}",
             "⚠️  Warning: You are using a non-standard commit type!".yellow()
