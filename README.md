@@ -1,5 +1,7 @@
 # ✨ neat-commits (neat)
 
+![neat-commits demo](.github/assets/demo.gif)
+
 A lightweight, blazing fast, and user-friendly CLI helper for writing **Conventional Commits**.
 
 Built with Rust, it weighs **under 700 KB**, boots up instantly, and works both as an interactive wizard and a quick scriptable CLI tool.
