@@ -58,5 +58,6 @@ jobs:
           formula-name: neat
           homebrew-tap: biqydu/homebrew-tap
           download-url: https://github.com/biqydu/neat-commits/archive/refs/tags/${{ github.ref_name }}.tar.gz
+          commit-message: "neat {{version}}"
         env:
           COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
