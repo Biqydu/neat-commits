@@ -21,7 +21,7 @@ Built with Rust, it weighs **under 700 KB**, boots up instantly, and works both 
 Since the project is open-source, you can install it directly from GitHub using Cargo. Make sure you have [Rust installed](https://www.rust-lang.org/tools/install).
 
 ```bash
-cargo install --git https://github.com/Biqydu/neat-commits.git
+cargo install neat-commits
 
 ```
 
