@@ -18,14 +18,27 @@ Built with Rust, it weighs **under 700 KB**, boots up instantly, and works both 
 
 ## 📦 Installation
 
-Since the project is open-source, you can install it directly from GitHub using Cargo. Make sure you have [Rust installed](https://www.rust-lang.org/tools/install).
+You can install `neat-commits` using either Cargo (Rust's package manager) or Homebrew. Both methods work on Linux and macOS.
+
+### 1. Via Cargo (Recommended for Rust developers)
+
+Make sure you have [Rust installed](https://www.rust-lang.org/tools/install), then run:
 
 ```bash
 cargo install neat-commits
-
 ```
 
-_Note: Even though the package is named `neat-commits`, it installs a binary called **`neat`** for quick and easy typing._
+### 2. Via Homebrew (Linux & macOS)
+
+```bash
+# Add the custom tap repository
+brew tap biqydu/neat-commits
+
+# Install the formula explicitly
+brew install biqydu/neat-commits/neat
+```
+
+Note: No matter which installation method you choose, the package installs a lightweight binary called `neat` directly into your PATH for quick and easy typing in your terminal.
 
 ---
 
@@ -37,7 +50,6 @@ Simply type `neat` in any Git repository. The wizard will guide you through the 
 
 ```bash
 neat
-
 ```
 
 **How it looks:**
@@ -54,14 +66,12 @@ If you already know what to write, you can bypass the questions entirely by usin
 
 ```bash
 neat -t feat -s api -m "add user authentication"
-
 ```
 
 For **Breaking Changes** via CLI:
 
 ```bash
 neat -t fix -s core -m "remove deprecated endpoints" -b --breaking-desc "Drop support for v1 API"
-
 ```
 
 ---
