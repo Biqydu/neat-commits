@@ -53,7 +53,7 @@ jobs:
 
       - name: Update Homebrew Formula
         if: matrix.os == 'ubuntu-latest'
-        uses: mislav/bump-homebrew-formula-action@v3
+        uses: mislav/bump-homebrew-formula-action@v4
         with:
           formula-name: neat
           homebrew-tap: biqydu/homebrew-tap
