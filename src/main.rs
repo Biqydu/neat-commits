@@ -32,6 +32,12 @@ fn main() -> Result<()> {
 
     let is_interactive = args.r#type.is_none() || args.message.is_none();
 
+    let has_staged_files = Command::new("git")
+        .args(["diff", "--cached", "--quiet"])
+        .status()
+        .map(|s| !s.success())
+        .unwrap_or(true);
+
     if is_interactive {
         println!(
             "\n{}",
@@ -41,14 +47,44 @@ fn main() -> Result<()> {
         );
     }
 
+    if !has_staged_files {
+        if is_interactive {
+            println!(
+                "{}",
+                "⚠️  Warning: No files staged for commit. Did you forget to run `git add`?"
+                    .yellow()
+            );
+            if !Confirm::with_theme(&ColorfulTheme::default())
+                .with_prompt("Do you want to proceed anyway?")
+                .default(false)
+                .interact()?
+            {
+                println!("{}", "Aborted.".bright_black());
+                return Ok(());
+            }
+        } else {
+            eprintln!(
+                "{}",
+                "❌ Error: No files staged for commit. Run `git add` first."
+                    .red()
+                    .bold()
+            );
+            return Ok(());
+        }
+    }
+
     let types = [
         "feat:     New feature",
         "fix:      Bug fix",
         "docs:     Documentation changes",
         "style:    Formatting, punctuation (no code changes)",
         "refactor: Code refactoring (neither bug fix nor new feature)",
+        "perf:     Code change that improves performance",
         "test:     Adding or updating tests",
-        "chore:    Maintenance, build, dependencies, etc.",
+        "build:    Changes affecting build system or external dependencies",
+        "ci:       Changes to CI configuration files and scripts",
+        "chore:    Other changes that don't modify src or test files",
+        "revert:   Reverts a previous commit",
     ];
 
     let commit_type = match args.r#type {
@@ -68,12 +104,10 @@ fn main() -> Result<()> {
         }
     };
 
-    let valid_types: Vec<&str> = types
+    if !types
         .iter()
-        .map(|t| t.split(':').next().unwrap().trim())
-        .collect();
-
-    if !valid_types.contains(&commit_type.as_str()) {
+        .any(|t| t.starts_with(&format!("{}:", commit_type)))
+    {
         println!(
             "{}",
             "⚠️  Warning: You are using a non-standard commit type!".yellow()
@@ -130,18 +164,23 @@ fn main() -> Result<()> {
     if is_breaking_change {
         let breaking_description = match args.breaking_desc {
             Some(desc) => desc,
-            None => Input::with_theme(&ColorfulTheme::default())
-                .with_prompt("Describe the breaking change (required)")
-                .validate_with(|input: &String| {
-                    if input.trim().is_empty() {
-                        Err("Breaking change description cannot be empty!")
-                    } else {
-                        Ok(())
-                    }
-                })
-                .interact_text()?,
+            None => {
+                if is_interactive {
+                    Input::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Describe the breaking change (required)")
+                        .validate_with(|input: &String| {
+                            if input.trim().is_empty() {
+                                Err("Breaking change description cannot be empty!")
+                            } else {
+                                Ok(())
+                            }
+                        })
+                        .interact_text()?
+                } else {
+                    "Unspecified breaking change".to_string()
+                }
+            }
         };
-
         final_message = format!(
             "{}\n\nBREAKING CHANGE: {}",
             final_message,
