@@ -6,9 +6,8 @@ mod prompt;
 
 use anyhow::{Result, bail};
 use clap::Parser;
-use colored::Colorize;
-
 use cli::Cli;
+use colored::Colorize;
 use message::CommitMessage;
 use prompt::Prompter;
 

@@ -1,7 +1,6 @@
+use crate::commit_type::COMMIT_TYPES;
 use anyhow::Result;
 use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
-
-use crate::commit_type::COMMIT_TYPES;
 
 /// Thin wrapper around `dialoguer` sharing a single theme.
 pub struct Prompter {

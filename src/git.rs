@@ -1,6 +1,5 @@
-use std::process::Command;
-
 use anyhow::{Context, Result, bail, ensure};
+use std::process::Command;
 
 const GIT_MISSING: &str = "Failed to run git command. Is git in your PATH?";
 
