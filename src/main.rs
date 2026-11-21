@@ -1,226 +1,136 @@
-use anyhow::{Context, Result};
+mod cli;
+mod commit_type;
+mod git;
+mod message;
+mod prompt;
+
+use anyhow::{Result, bail};
 use clap::Parser;
 use colored::Colorize;
-use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
-use std::process::Command;
 
-#[derive(Parser, Debug)]
-#[command(
-    name = "neat",
-    version,
-    about = "A clean and user-friendly Conventional Commits assistant"
-)]
-struct Args {
-    #[arg(short, long)]
-    r#type: Option<String>,
+use cli::Cli;
+use message::CommitMessage;
+use prompt::Prompter;
 
-    #[arg(short, long)]
-    scope: Option<String>,
-
-    #[arg(short, long)]
-    message: Option<String>,
-
-    #[arg(short, long)]
-    breaking: bool,
-
-    #[arg(long)]
-    breaking_desc: Option<String>,
-}
+const MAX_HEADER_LEN: usize = 72;
+const DEFAULT_BREAKING_DESC: &str = "Unspecified breaking change";
 
 fn main() -> Result<()> {
-    let args = Args::parse();
+    let cli = Cli::parse();
+    let interactive = cli.is_interactive();
+    let prompter = Prompter::new();
 
-    let is_interactive = args.r#type.is_none() || args.message.is_none();
-
-    let has_staged_files = Command::new("git")
-        .args(["diff", "--cached", "--quiet"])
-        .status()
-        .map(|s| !s.success())
-        .unwrap_or(true);
-
-    if is_interactive {
+    if interactive {
         println!(
-            "\n{}",
-            "✨ NEAT — Conventional Commits Helper ✨\n"
-                .bold()
-                .magenta()
+            "\n{}\n",
+            "✨ NEAT — Conventional Commits Helper ✨".bold().magenta()
         );
     }
 
-    if !has_staged_files {
-        if is_interactive {
-            println!(
-                "{}",
-                "⚠️  Warning: No files staged for commit. Did you forget to run `git add`?"
-                    .yellow()
-            );
-            if !Confirm::with_theme(&ColorfulTheme::default())
-                .with_prompt("Do you want to proceed anyway?")
-                .default(false)
-                .interact()?
-            {
-                println!("{}", "Aborted.".bright_black());
-                return Ok(());
-            }
-        } else {
-            eprintln!(
-                "{}",
-                "❌ Error: No files staged for commit. Run `git add` first."
-                    .red()
-                    .bold()
-            );
-            return Ok(());
-        }
+    if !confirm_staged_files(interactive, &prompter)? {
+        return Ok(());
     }
 
-    let types = [
-        "feat:     New feature",
-        "fix:      Bug fix",
-        "docs:     Documentation changes",
-        "style:    Formatting, punctuation (no code changes)",
-        "refactor: Code refactoring (neither bug fix nor new feature)",
-        "perf:     Code change that improves performance",
-        "test:     Adding or updating tests",
-        "build:    Changes affecting build system or external dependencies",
-        "ci:       Changes to CI configuration files and scripts",
-        "chore:    Other changes that don't modify src or test files",
-        "revert:   Reverts a previous commit",
-    ];
+    let message = collect_message(cli, interactive, &prompter)?;
 
-    let commit_type = match args.r#type {
-        Some(t) => t,
-        None => {
-            let selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt("Select the type of change")
-                .default(0)
-                .items(types)
-                .interact()?;
-            types[selection]
-                .split(':')
-                .next()
-                .unwrap()
-                .trim()
-                .to_string()
-        }
-    };
-
-    if !types
-        .iter()
-        .any(|t| t.starts_with(&format!("{}:", commit_type)))
-    {
+    if message.header().chars().count() > MAX_HEADER_LEN {
         println!(
             "{}",
-            "⚠️  Warning: You are using a non-standard commit type!".yellow()
+            format!(
+                "⚠️  Warning: First line of commit message exceeds {MAX_HEADER_LEN} characters!"
+            )
+            .yellow()
         );
     }
 
-    let scope = match args.scope {
-        Some(s) => s,
-        None => Input::with_theme(&ColorfulTheme::default())
-            .with_prompt("Scope (optional, press Enter to skip)")
-            .allow_empty(true)
-            .interact_text()?,
-    };
-
-    let description = match args.message {
-        Some(m) => m,
-        None => Input::with_theme(&ColorfulTheme::default())
-            .with_prompt("Enter a short commit message")
-            .validate_with(|input: &String| {
-                if input.trim().is_empty() {
-                    Err("Commit message cannot be empty!")
-                } else {
-                    Ok(())
-                }
-            })
-            .interact_text()?,
-    };
-
-    let is_breaking_change = if args.breaking {
-        true
-    } else if is_interactive {
-        Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Does this commit introduce a breaking change?")
-            .default(false)
-            .interact()?
-    } else {
-        false
-    };
-
-    let bang = if is_breaking_change { "!" } else { "" };
-    let mut final_message = if scope.trim().is_empty() {
-        format!("{}{}: {}", commit_type, bang, description)
-    } else {
-        format!("{}({}){}: {}", commit_type, scope.trim(), bang, description)
-    };
-
-    if final_message.lines().next().unwrap().len() > 72 {
-        println!(
-            "{}",
-            "⚠️  Warning: First line of commit message exceeds 72 characters!".yellow()
-        );
+    if interactive && !confirm_commit(&message, &prompter)? {
+        println!("{}", "Aborted. Commit was not created.".yellow());
+        return Ok(());
     }
 
-    if is_breaking_change {
-        let breaking_description = match args.breaking_desc {
-            Some(desc) => desc,
-            None => {
-                if is_interactive {
-                    Input::with_theme(&ColorfulTheme::default())
-                        .with_prompt("Describe the breaking change (required)")
-                        .validate_with(|input: &String| {
-                            if input.trim().is_empty() {
-                                Err("Breaking change description cannot be empty!")
-                            } else {
-                                Ok(())
-                            }
-                        })
-                        .interact_text()?
-                } else {
-                    "Unspecified breaking change".to_string()
-                }
-            }
-        };
-        final_message = format!(
-            "{}\n\nBREAKING CHANGE: {}",
-            final_message,
-            breaking_description.trim()
-        );
-    }
-
-    if is_interactive {
-        println!(
-            "\n{} {}",
-            "📝 Prepared commit message:".bright_black(),
-            final_message.green().bold()
-        );
-
-        if !Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Does this look correct?")
-            .default(true)
-            .interact()?
-        {
-            println!("{}", "Aborted. Commit was not created.".yellow());
-            return Ok(());
-        }
-    }
-
-    let status = Command::new("git")
-        .arg("commit")
-        .arg("-m")
-        .arg(&final_message)
-        .status()
-        .context("Failed to run git command. Is git in your PATH?")?;
-
-    if status.success() {
-        println!("{}", "✅ Success! Code has been committed.".green().bold());
-    } else {
-        eprintln!("\n{}", "❌ Git returned an error!".red().bold());
-        eprintln!(
-            "{}",
-            "Make sure you staged your files (git add) before running neat.".bright_black()
-        );
-    }
+    git::commit(&message.to_string())?;
+    println!("{}", "✅ Success! Code has been committed.".green().bold());
 
     Ok(())
+}
+
+/// Returns `Ok(false)` when the user decided to abort.
+fn confirm_staged_files(interactive: bool, prompter: &Prompter) -> Result<bool> {
+    if git::has_staged_changes()? {
+        return Ok(true);
+    }
+
+    if !interactive {
+        bail!("No files staged for commit. Run `git add` first.");
+    }
+
+    println!(
+        "{}",
+        "⚠️  Warning: No files staged for commit. Did you forget to run `git add`?".yellow()
+    );
+    let proceed = prompter.confirm("Do you want to proceed anyway?", false)?;
+    if !proceed {
+        println!("{}", "Aborted.".bright_black());
+    }
+    Ok(proceed)
+}
+
+fn collect_message(cli: Cli, interactive: bool, prompter: &Prompter) -> Result<CommitMessage> {
+    let Cli {
+        commit_type,
+        scope,
+        message,
+        breaking,
+        breaking_desc,
+    } = cli;
+
+    let kind = match commit_type {
+        Some(kind) => {
+            if !commit_type::is_standard(&kind) {
+                println!(
+                    "{}",
+                    "⚠️  Warning: You are using a non-standard commit type!".yellow()
+                );
+            }
+            kind
+        }
+        None => prompter.commit_type()?,
+    };
+
+    let scope = match scope {
+        Some(scope) => Some(scope),
+        None if interactive => prompter.scope()?,
+        None => None,
+    };
+
+    let description = match message {
+        Some(message) => message,
+        None => prompter.description()?,
+    };
+
+    let is_breaking = breaking
+        || breaking_desc.is_some()
+        || (interactive
+            && prompter.confirm("Does this commit introduce a breaking change?", false)?);
+
+    let breaking = if is_breaking {
+        Some(match breaking_desc {
+            Some(desc) => desc,
+            None if interactive => prompter.breaking_description()?,
+            None => DEFAULT_BREAKING_DESC.to_owned(),
+        })
+    } else {
+        None
+    };
+
+    Ok(CommitMessage::new(kind, scope, description, breaking))
+}
+
+fn confirm_commit(message: &CommitMessage, prompter: &Prompter) -> Result<bool> {
+    println!(
+        "\n{} {}",
+        "📝 Prepared commit message:".bright_black(),
+        message.to_string().green().bold()
+    );
+    prompter.confirm("Does this look correct?", true)
 }
