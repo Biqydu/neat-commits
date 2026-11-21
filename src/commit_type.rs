@@ -6,11 +6,7 @@ pub struct CommitType {
 impl CommitType {
     /// Text shown in the selection menu, e.g. `feat:     New feature`.
     pub fn label(&self) -> String {
-        format!(
-            "{:<10} {}",
-            format_args!("{}:", self.name),
-            self.description
-        )
+        format!("{:<10} {}", format!("{}:", self.name), self.description)
     }
 }
 
